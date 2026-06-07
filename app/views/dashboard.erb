@@ -1,0 +1,993 @@
+<div class="dashboard-container">
+  
+  <!-- Left Sidebar: History -->
+  <aside class="sidebar glass-panel">
+    <div class="sidebar-header">
+      <div class="logo">
+        <i class="fa-solid fa-brain logo-icon"></i>
+        <span>CareerMind <strong class="logo-accent">AI</strong></span>
+      </div>
+      <!-- Language Selector -->
+      <div class="lang-selector">
+        <a href="/locale/en" class="lang-link <%= 'active' if current_locale == 'en' %>">EN</a>
+        <span class="divider">|</span>
+        <a href="/locale/tr" class="lang-link <%= 'active' if current_locale == 'tr' %>">TR</a>
+      </div>
+    </div>
+    
+    <a href="/" class="btn btn-secondary sidebar-action-btn">
+      <i class="fa-solid fa-circle-plus"></i> <%= t(:analyze_new) %>
+    </a>
+
+    
+    
+    <div class="sidebar-section">
+      <h3><i class="fa-solid fa-history"></i> <%= t(:history) %></h3>
+      <div class="history-list">
+        <% if @records.empty? %>
+          <div class="history-empty">
+            <i class="fa-regular fa-folder-open"></i>
+            <p><%= t(:empty_history) %></p>
+          </div>
+        <% else %>
+          <% @records.each do |rec| %>
+            <div class="history-item glass-card <%= 'active-item' if rec.id == @record.id %>">
+              <div class="history-item-details">
+                <a href="/dashboard/<%= rec.id %>" class="history-name">
+                  <%= rec.personal_info['name'] || "Candidate" %>
+                </a>
+                <span class="history-meta">
+                  <%= rec.career_recommendations.first&.[]('role') || 'Software Engineering' %>
+                </span>
+                <span class="history-date"><%= format_date(rec.created_at) %></span>
+              </div>
+              <div class="history-item-badge">
+                <span class="history-score <%= score_class(rec.scores['general']) %>">
+                  <%= rec.scores['general'] %>
+                </span>
+                <form action="/delete/<%= rec.id %>" method="POST" class="delete-form" onsubmit="return confirm('Are you sure?');">
+                  <button type="submit" class="delete-btn" title="Delete record">
+                    <i class="fa-solid fa-trash-can"></i>
+                  </button>
+                </form>
+              </div>
+            </div>
+          <% end %>
+        <% end %>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Dashboard Content -->
+  <main class="main-content">
+    
+    <!-- Top Action Navbar -->
+    <header class="dashboard-navbar glass-panel">
+      <div class="candidate-meta-header">
+        <div class="profile-avatar <%= 'has-photo' if @record.personal_info['photo'] %>" onclick="triggerAvatarUpload()" style="cursor: pointer; position: relative; overflow: hidden;">
+          <% if @record.personal_info['photo'] && !@record.personal_info['photo'].empty? %>
+            <img src="<%= @record.personal_info['photo'] %>" alt="Profile Photo" id="avatar-img" style="width: 100%; height: 100%; object-fit: cover;" />
+          <% else %>
+            <i class="fa-solid fa-user-tie"></i>
+          <% end %>
+          <div class="avatar-hover-overlay">
+            <i class="fa-solid fa-camera"></i>
+            <span>Upload</span>
+          </div>
+        </div>
+        <!-- Hidden Avatar Upload Form -->
+        <form id="avatar-upload-form" action="/dashboard/<%= @record.id %>/upload_avatar" method="POST" enctype="multipart/form-data" style="display: none;">
+          <input type="file" id="avatar-file-input" name="avatar" accept=".png,.jpg,.jpeg,.gif" onchange="submitAvatarForm()" />
+        </form>
+        <div class="meta-details">
+          <h2><%= @record.personal_info['name'] || "Candidate Profile" %></h2>
+          <div class="meta-pills">
+            <% if @record.personal_info['email'] %>
+              <span class="pill"><i class="fa-regular fa-envelope"></i> <%= @record.personal_info['email'] %></span>
+            <% end %>
+            <% if @record.personal_info['phone'] %>
+              <span class="pill"><i class="fa-solid fa-phone"></i> <%= @record.personal_info['phone'] %></span>
+            <% end %>
+            <% if @record.personal_info['linkedin'] %>
+              <span class="pill pill-link"><a href="https://linkedin.com/in/<%= @record.personal_info['linkedin'] %>" target="_blank"><i class="fa-brands fa-linkedin"></i> LinkedIn</a></span>
+            <% end %>
+            <% if @record.personal_info['github'] %>
+              <span class="pill pill-link"><a href="https://github.com/<%= @record.personal_info['github'] %>" target="_blank"><i class="fa-brands fa-github"></i> GitHub</a></span>
+            <% end %>
+          </div>
+        </div>
+      </div>
+      
+      <div class="navbar-actions">
+        <a href="/download/<%= @record.id %>" class="btn btn-primary">
+          <i class="fa-solid fa-file-pdf"></i> <%= t(:download_pdf) %>
+        </a>
+        <a href="/" class="btn btn-secondary">
+          <i class="fa-solid fa-arrow-rotate-left"></i> <%= t(:back) %>
+        </a>
+      </div>
+    </header>
+
+    <!-- Dashboard Navigation Tabs -->
+    <nav class="dashboard-tabs glass-panel">
+      <button class="tab-btn active" onclick="switchTab(this, 'tab-analysis')">
+        <i class="fa-solid fa-square-poll-vertical animate-icon"></i> <%= t(:tab_analysis) %>
+      </button>
+      <button class="tab-btn" onclick="switchTab(this, 'tab-roadmap')">
+        <i class="fa-solid fa-road animate-icon"></i> <%= t(:tab_roadmap) %>
+      </button>
+      <button class="tab-btn" onclick="switchTab(this, 'tab-interview')">
+        <i class="fa-solid fa-circle-question animate-icon"></i> <%= t(:tab_interview) %>
+      </button>
+      <button class="tab-btn" onclick="switchTab(this, 'tab-chat')">
+        <i class="fa-solid fa-comments animate-icon"></i> <%= t(:tab_chat) %>
+      </button>
+      <button class="tab-btn" onclick="switchTab(this, 'tab-matcher')">
+        <i class="fa-solid fa-bullseye animate-icon"></i> <%= t(:tab_matcher) %>
+      </button>
+    </nav>
+
+    <!-- TAB 1: CV Değerlendirme Analizi -->
+    <div id="tab-analysis" class="tab-content">
+      <!-- Score Highlights Banner -->
+      <section class="dashboard-scores-row">
+        
+        <!-- General Score Gauge Widget -->
+        <div class="score-widget glass-panel">
+          <div class="gauge-container">
+            <canvas id="gauge-canvas" width="160" height="160"></canvas>
+            <div class="gauge-center">
+              <span class="gauge-value"><%= @record.scores['general'] %></span>
+              <span class="gauge-label"><%= t(:overall_score) %></span>
+            </div>
+          </div>
+          
+          <div class="score-evaluation-label">
+            <%= score_badge(@record.scores['general']) %>
+            <p><%= t(:subtitle) %></p>
+          </div>
+        </div>
+
+        <!-- Linear Metrics Bars Widget -->
+        <div class="metrics-widget glass-panel">
+          <h3><i class="fa-solid fa-sliders text-cyan"></i> <%= t(:quality_sub) %></h3>
+          <p class="widget-subtitle"><%= t(:quality_sub_desc) %></p>
+          
+          <div class="metric-progress-list">
+            <div class="metric-row">
+              <div class="metric-row-header">
+                <span class="label"><%= t(:ats_comp) %></span>
+                <span class="value <%= score_class(@record.scores['ats']) %>"><%= @record.scores['ats'] %>/100</span>
+              </div>
+              <div class="progress-bar-outer">
+                <div class="progress-bar-inner" style="width: <%= @record.scores['ats'] %>%;"></div>
+              </div>
+            </div>
+
+            <div class="metric-row">
+              <div class="metric-row-header">
+                <span class="label"><%= t(:tech_comp) %></span>
+                <span class="value <%= score_class(@record.scores['tech']) %>"><%= @record.scores['tech'] %>/100</span>
+              </div>
+              <div class="progress-bar-outer">
+                <div class="progress-bar-inner" style="width: <%= @record.scores['tech'] %>%;"></div>
+              </div>
+            </div>
+
+            <div class="metric-row">
+              <div class="metric-row-header">
+                <span class="label"><%= t(:prof_pres) %></span>
+                <span class="value <%= score_class(@record.scores['presentation']) %>"><%= @record.scores['presentation'] %>/100</span>
+              </div>
+              <div class="progress-bar-outer">
+                <div class="progress-bar-inner" style="width: <%= @record.scores['presentation'] %>%;"></div>
+              </div>
+            </div>
+
+            <div class="metric-row">
+              <div class="metric-row-header">
+                <span class="label"><%= t(:employability) %></span>
+                <span class="value <%= score_class(@record.scores['employability']) %>"><%= @record.scores['employability'] %>/100</span>
+              </div>
+              <div class="progress-bar-outer">
+                <div class="progress-bar-inner" style="width: <%= @record.scores['employability'] %>%;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Radar Technology Chart -->
+        <div class="radar-widget glass-panel">
+          <h3><i class="fa-solid fa-circle-nodes text-indigo"></i> <%= t(:tech_map) %></h3>
+          <p class="widget-subtitle"><%= t(:tech_map_sub) %></p>
+          <div class="radar-canvas-container">
+            <canvas id="radar-canvas" width="220" height="220"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- Detailed Highlights (Strengths, Weaknesses, Suggestions) -->
+      <section class="dashboard-highlights-grid">
+        
+        <!-- Strengths -->
+        <div class="highlight-card glass-panel card-strengths">
+          <h3><i class="fa-solid fa-circle-check text-green"></i> <%= t(:strong_points) %></h3>
+          <ul>
+            <% @record.highlights['strengths'].each do |str| %>
+              <li><i class="fa-solid fa-check icon-bullet"></i> <%= t_feedback(str) %></li>
+            <% end %>
+          </ul>
+        </div>
+
+        <!-- Weaknesses -->
+        <div class="highlight-card glass-panel card-weaknesses">
+          <h3><i class="fa-solid fa-circle-xmark text-red"></i> <%= t(:structural_gaps) %></h3>
+          <ul>
+            <% @record.highlights['weaknesses'].each do |wk| %>
+              <li><i class="fa-solid fa-xmark icon-bullet"></i> <%= t_feedback(wk) %></li>
+            <% end %>
+          </ul>
+        </div>
+
+        <!-- Suggestions -->
+        <div class="highlight-card glass-panel card-suggestions">
+          <h3><i class="fa-solid fa-circle-info text-yellow"></i> <%= t(:suggestions) %></h3>
+          <ul>
+            <% @record.highlights['suggestions'].each do |sug| %>
+              <li><i class="fa-regular fa-lightbulb icon-bullet"></i> <%= t_feedback(sug) %></li>
+            <% end %>
+          </ul>
+        </div>
+      </section>
+
+      <!-- AI Resume Improvement Guide Section -->
+      <% if @record.guide && !@record.guide.empty? %>
+        <section class="resume-guide-section">
+          <div class="section-title-row">
+            <h3><i class="fa-solid fa-wand-magic-sparkles text-purple"></i> <%= t(:guide_title) %></h3>
+            <p class="section-subtitle"><%= t(:guide_subtitle) %></p>
+          </div>
+
+          <div class="guide-cards-grid">
+            <% @record.guide.each do |key, val| %>
+              <div class="guide-card glass-panel">
+                <div class="guide-card-header">
+                  <h4><%= val['title'][current_locale] %></h4>
+                  <span class="placement-badge"><i class="fa-solid fa-map-location-dot"></i> <%= val['placement'][current_locale] %></span>
+                </div>
+                
+                <div class="guide-comparison-row">
+                  <!-- BEFORE -->
+                  <div class="comparison-col comparison-before">
+                    <h5><%= t(:before_lbl) %></h5>
+                    <div class="comparison-box">
+                      <% if val['before'].is_a?(Hash) %>
+                        <%= val['before'][current_locale] %>
+                      <% else %>
+                        <%= val['before'] %>
+                      <% end %>
+                    </div>
+                  </div>
+                  
+                  <!-- AFTER -->
+                  <div class="comparison-col comparison-after">
+                    <div class="after-header-row">
+                      <h5><%= t(:after_lbl) %></h5>
+                      <button class="btn btn-secondary btn-copy" onclick="copyText(this, '<%= key %>')">
+                        <i class="fa-regular fa-copy"></i> <span class="copy-text-lbl"><%= t(:copy_lbl) %></span>
+                      </button>
+                    </div>
+                    <div class="comparison-box" id="guide-text-<%= key %>"><% if val['after'].is_a?(Hash) %><%= val['after'][current_locale] %><% else %><%= val['after'] %><% end %></div>
+                  </div>
+                </div>
+              </div>
+            <% end %>
+          </div>
+        </section>
+      <% end %>
+
+      <!-- Career Alignment & Missing Skills Gap Grid -->
+      <section class="career-alignment-section">
+        <div class="section-title-row">
+          <h3><i class="fa-solid fa-compass text-indigo"></i> <%= t(:career_rec) %></h3>
+          <p class="section-subtitle"><%= t(:career_rec_sub) %></p>
+        </div>
+
+        <div class="career-grids">
+          <% @record.career_recommendations.first(3).each_with_index do |rec, index| %>
+            <% role_name = rec['role'] %>
+            <% gaps = @record.missing_skills[role_name] || [] %>
+            <div class="career-match-card glass-panel <%= 'primary-match' if index == 0 %>">
+              <div class="career-card-header">
+                <div>
+                  <h4><%= role_name %></h4>
+                  <p class="role-desc"><%= t_feedback(rec['description']) %></p>
+                </div>
+                <div class="match-score-pill">
+                  <span class="pct"><%= rec['match_percentage'] %>%</span>
+                  <span class="lbl">Match</span>
+                </div>
+              </div>
+              
+              <div class="matched-skills-tags">
+                <h5><%= t(:matched_skills) %>:</h5>
+                <div class="tags-row">
+                  <% if rec['matched_skills'].empty? %>
+                    <span class="no-tags">No specific matches</span>
+                  <% else %>
+                    <% rec['matched_skills'].each do |skill| %>
+                      <span class="tag tag-matched"><%= skill %></span>
+                    <% end %>
+                  <% end %>
+                </div>
+              </div>
+
+              <div class="missing-skills-box">
+                <h5><i class="fa-solid fa-triangle-exclamation text-yellow"></i> <%= t(:target_gaps) %>:</h5>
+                <div class="tags-row">
+                  <% if gaps.empty? %>
+                    <span class="no-gaps"><i class="fa-solid fa-circle-check"></i> <%= t(:gaps_complete) %></span>
+                  <% else %>
+                    <% gaps.each do |gap| %>
+                      <span class="tag tag-gap"><%= gap %></span>
+                    <% end %>
+                  <% end %>
+                </div>
+              </div>
+            </div>
+          <% end %>
+        </div>
+      </section>
+
+      <!-- Detected Skills Taxonomy Details -->
+      <section class="taxonomy-section glass-panel">
+        <h3><i class="fa-solid fa-tags text-cyan"></i> <%= t(:taxonomy) %></h3>
+        <p class="widget-subtitle font-sm"><%= t(:taxonomy_sub) %></p>
+        
+        <div class="taxonomy-grid">
+          <% 
+            skills_map = SkillAnalyzerService.new(@record.parsed_text, @record.skills).analyze['categorized']
+            skills_map.each do |cat, list|
+              translated_cat = case cat
+                               when 'Frontend' then (current_locale == 'tr' ? 'Ön Yüz (Frontend)' : 'Frontend')
+                               when 'Backend' then (current_locale == 'tr' ? 'Arka Yüz (Backend)' : 'Backend')
+                               when 'DevOps & Cloud' then (current_locale == 'tr' ? 'DevOps ve Bulut' : 'DevOps & Cloud')
+                               when 'Databases & Caching' then (current_locale == 'tr' ? 'Veritabanı ve Önbellek' : 'Databases & Caching')
+                               when 'Testing & QA' then (current_locale == 'tr' ? 'Test ve Kalite (QA)' : 'Testing & QA')
+                               when 'Methodologies & Concepts' then (current_locale == 'tr' ? 'Metotlar ve Yaklaşımlar' : 'Methodologies & Concepts')
+                               else cat
+                               end
+          %>
+            <div class="taxonomy-box">
+              <h5><%= translated_cat %></h5>
+              <div class="tags-row">
+                <% if list.empty? %>
+                  <span class="no-tags-cat">None detected</span>
+                <% else %>
+                  <% list.each do |item| %>
+                    <span class="tag tag-taxonomy"><%= item %></span>
+                  <% end %>
+                <% end %>
+              </div>
+            </div>
+          <% end %>
+        </div>
+      </section>
+    </div>
+
+    <!-- TAB 2: Yol Haritası (Tech Roadmap) -->
+    <div id="tab-roadmap" class="tab-content" style="display: none;">
+      <section class="roadmap-section">
+        <div class="section-title-row">
+          <h3><i class="fa-solid fa-road text-indigo"></i> <%= t(:roadmap_title) %></h3>
+          <p class="section-subtitle"><%= t(:roadmap_subtitle) %></p>
+        </div>
+        
+        <div class="timeline-container">
+          <% @record.roadmap.each_with_index do |stage, i| %>
+            <div class="timeline-card glass-panel">
+              <div class="timeline-badge"><%= i + 1 %></div>
+              <div class="timeline-header">
+                <h4><%= stage['stage'] %></h4>
+                <p class="timeline-obj"><strong><%= t(:roadmap_objective) %>:</strong> <%= stage['objective'] %></p>
+              </div>
+              <div class="timeline-body">
+                <h5><%= t(:roadmap_tasks) %>:</h5>
+                <ul class="task-checklist">
+                  <% stage['tasks'].each do |task| %>
+                    <li><i class="fa-regular fa-square-check text-indigo"></i> <%= task %></li>
+                  <% end %>
+                </ul>
+              </div>
+            </div>
+          <% end %>
+        </div>
+      </section>
+    </div>
+
+    <!-- TAB 3: Mülakat Simülasyon Soruları (Interview Prep) -->
+    <div id="tab-interview" class="tab-content" style="display: none;">
+      <section class="interview-section">
+        <div class="section-title-row">
+          <h3><i class="fa-solid fa-circle-question text-cyan"></i> <%= t(:interview_title) %></h3>
+          <p class="section-subtitle"><%= t(:interview_subtitle) %></p>
+        </div>
+        
+        <div class="interview-cards-grid">
+          <% @record.interview_prep.each_with_index do |prep, idx| %>
+            <div class="interview-card glass-panel">
+              <div class="interview-card-header">
+                <span class="q-badge">Q<%= idx + 1 %></span>
+                <h4><%= prep['question'] %></h4>
+              </div>
+              <div class="interview-card-body">
+                <div class="q-context">
+                  <strong><%= t(:context_lbl) %>:</strong> <%= prep['context'] %>
+                </div>
+                     <div class="q-actions-row" style="display: flex; gap: 12px; margin-top: 15px;">
+                  <button class="btn btn-secondary accordion-toggle" onclick="toggleAnswer(this)">
+                    <i class="fa-solid fa-eye"></i> <%= current_locale == 'tr' ? 'Önerilen Cevabı Göster' : 'Reveal Suggested Response' %>
+                  </button>
+                  <button class="btn btn-primary btn-practice" onclick="openPracticeSimulator(this, <%= idx %>)">
+                    <i class="fa-solid fa-microphone"></i> <%= t(:interview_practice) %>
+                  </button>
+                </div>
+                
+                <div class="accordion-content" style="display: none; margin-top: 15px;">
+                  <div class="answer-box-header">
+                    <h5><%= t(:answer_lbl) %>:</h5>
+                    <button class="btn btn-secondary btn-copy" onclick="copyPrepText(this, <%= idx %>)">
+                      <i class="fa-regular fa-copy"></i> <span class="copy-text-lbl"><%= t(:copy_lbl) %></span>
+                    </button>
+                  </div>
+                  <div class="answer-box" id="prep-text-<%= idx %>"><%= prep['suggested_answer'] %></div>
+                </div>
+
+                <!-- Dynamic Live Practice Simulator Panel -->
+                <div class="practice-simulator-panel" id="practice-panel-<%= idx %>" style="display: none; margin-top: 15px; border-top: 1px solid var(--border-light); padding-top: 15px;">
+                  <h5 style="margin-bottom: 8px;"><%= t(:interview_user_answer) %></h5>
+                  <textarea class="practice-answer-textarea" placeholder="Type your answer here..." rows="4" style="width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--border-light); border-radius: 8px; color: #fff; padding: 10px; font-family: inherit; font-size: 0.85rem; resize: vertical;"></textarea>
+                  
+                  <button class="btn btn-primary" onclick="submitPracticeAnswer(this, <%= idx %>)" style="margin-top: 10px;">
+                    <i class="fa-solid fa-circle-nodes"></i> <%= t(:interview_submit) %>
+                  </button>
+                  
+                  <!-- Grading Results Spinner -->
+                  <div class="practice-spinner" style="display: none; margin-top: 15px; text-align: center;">
+                    <div class="spinner-ring" style="width: 30px; height: 30px; border-width: 3px; border-top-color: var(--accent-cyan);"></div>
+                    <p style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 5px;">Evaluating answer...</p>
+                  </div>
+                  
+                  <!-- Grading Result Report -->
+                  <div class="practice-results-box glass-panel" style="display: none; margin-top: 15px; padding: 15px; background: rgba(255,255,255,0.01);">
+                    <div class="result-header-row" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                      <h5 style="font-weight: 700; color: #fff;"><i class="fa-solid fa-square-poll-vertical text-cyan"></i> <%= t(:interview_grading) %></h5>
+                      <span class="badge practice-score-badge" style="background: rgba(6, 182, 212, 0.15); color: var(--accent-cyan); border: 1px solid rgba(6, 182, 212, 0.25);"><%= t(:interview_score) %>: <strong class="practice-score-value">0</strong>/100</span>
+                    </div>
+                    
+                    <div class="result-details" style="display: flex; flex-direction: column; gap: 10px;">
+                      <div>
+                        <strong style="font-size: 0.8rem; color: var(--text-secondary);"><i class="fa-solid fa-circle-check text-green"></i> <%= t(:interview_strengths) %>:</strong>
+                        <ul class="practice-strengths-list" style="margin-left: 15px; margin-top: 4px; font-size: 0.85rem; color: var(--text-primary); display: flex; flex-direction: column; gap: 4px; list-style: none;"></ul>
+                      </div>
+                      <div>
+                        <strong style="font-size: 0.8rem; color: var(--text-secondary);"><i class="fa-solid fa-circle-xmark text-yellow"></i> <%= t(:interview_gaps) %>:</strong>
+                        <ul class="practice-gaps-list" style="margin-left: 15px; margin-top: 4px; font-size: 0.85rem; color: var(--text-primary); display: flex; flex-direction: column; gap: 4px; list-style: none;"></ul>
+                      </div>
+                      <div>
+                        <strong style="font-size: 0.8rem; color: var(--text-secondary);"><i class="fa-solid fa-wand-magic-sparkles text-purple"></i> <%= t(:interview_refined) %>:</strong>
+                        <div class="practice-refined-box" style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.05); padding: 10px; border-radius: 6px; font-size: 0.85rem; color: var(--text-secondary); margin-top: 5px; white-space: pre-line; line-height: 1.4;"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>         </div>
+              </div>
+            </div>
+          <% end %>
+        </div>
+      </section>
+    </div>
+
+    <!-- TAB 4: AI Career Chat -->
+    <div id="tab-chat" class="tab-content" style="display: none;">
+      <section class="chat-section glass-panel" style="padding: 24px; display: flex; flex-direction: column; height: 620px; max-height: 620px;">
+        <div class="chat-header" style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 15px; border-bottom: 1px solid var(--border-light); margin-bottom: 15px;">
+          <h3 style="font-size: 1.1rem; color: #fff; margin: 0;"><i class="fa-solid fa-comments text-cyan"></i> <%= t(:tab_chat) %></h3>
+          <span class="active-model-badge" style="background: rgba(99, 102, 241, 0.15); color: var(--primary); border: 1px solid rgba(99, 102, 241, 0.25); padding: 4px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 600;"><i class="fa-solid fa-robot"></i> Engine: <span id="chat-model-name"><%= LLMService.active_model.upcase %></span></span>
+        </div>
+        
+        <div class="chat-messages" id="chat-box" style="flex-grow: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; padding-right: 8px; margin-bottom: 15px;">
+          <div class="message message-assistant" style="display: flex; gap: 12px; max-width: 85%;">
+            <div class="message-avatar" style="width: 32px; height: 32px; border-radius: 50%; background: rgba(99, 102, 241, 0.15); display: flex; align-items: center; justify-content: center; font-size: 0.9rem; color: var(--primary);"><i class="fa-solid fa-brain"></i></div>
+            <div class="message-content" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05); padding: 10px 14px; border-radius: 12px 12px 12px 0; font-size: 0.85rem; color: var(--text-primary); line-height: 1.4;">
+              <p><%= t(:chat_welcome) %></p>
+            </div>
+          </div>
+          
+          <% if session[:chats] && session[:chats][@record.id] %>
+            <% session[:chats][@record.id].each do |msg| %>
+              <% is_user = msg['role'] == 'user' %>
+              <div class="message message-<%= msg['role'] %>" style="display: flex; gap: 12px; max-width: 85%; <%= 'align-self: flex-end; flex-direction: row-reverse;' if is_user %>">
+                <div class="message-avatar" style="width: 32px; height: 32px; border-radius: 50%; background: <%= is_user ? 'rgba(6, 182, 212, 0.15)' : 'rgba(99, 102, 241, 0.15)' %>; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; color: <%= is_user ? 'var(--accent-cyan)' : 'var(--primary)' %>;"><i class="fa-solid <%= is_user ? 'fa-user' : 'fa-brain' %>"></i></div>
+                <div class="message-content" style="background: <%= is_user ? 'rgba(6, 182, 212, 0.08)' : 'rgba(255, 255, 255, 0.03)' %>; border: 1px solid <%= is_user ? 'rgba(6, 182, 212, 0.15)' : 'rgba(255, 255, 255, 0.05)' %>; padding: 10px 14px; border-radius: <%= is_user ? '12px 12px 0 12px' : '12px 12px 12px 0' %>; font-size: 0.85rem; color: var(--text-primary); line-height: 1.4;">
+                  <p><%= msg['content'].gsub(/\n/, '<br>') %></p>
+                </div>
+              </div>
+            <% end %>
+          <% end %>
+        </div>
+        
+        <div class="chat-suggestions" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;">
+          <button class="suggestion-btn" onclick="sendSuggestedMessage('<%= t(:chat_suggest_1) %>')" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); color: var(--text-secondary); padding: 6px 12px; border-radius: 20px; font-size: 0.75rem; cursor: pointer; transition: all 0.2s; font-family: inherit;"><%= t(:chat_suggest_1) %></button>
+          <button class="suggestion-btn" onclick="sendSuggestedMessage('<%= t(:chat_suggest_2) %>')" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); color: var(--text-secondary); padding: 6px 12px; border-radius: 20px; font-size: 0.75rem; cursor: pointer; transition: all 0.2s; font-family: inherit;"><%= t(:chat_suggest_2) %></button>
+          <button class="suggestion-btn" onclick="sendSuggestedMessage('<%= t(:chat_suggest_3) %>')" style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); color: var(--text-secondary); padding: 6px 12px; border-radius: 20px; font-size: 0.75rem; cursor: pointer; transition: all 0.2s; font-family: inherit;"><%= t(:chat_suggest_3) %></button>
+        </div>
+        
+        <div class="chat-input-row" style="display: flex; gap: 10px;">
+          <input type="text" id="chat-message-input" placeholder="<%= t(:chat_placeholder) %>" onkeypress="handleChatKeyPress(event)" style="flex-grow: 1; background: rgba(0,0,0,0.2); border: 1px solid var(--border-light); border-radius: 8px; color: #fff; padding: 10px 14px; font-family: inherit; font-size: 0.85rem;">
+          <button class="btn btn-primary" onclick="submitChatMessage()" style="padding: 10px 18px;">
+            <i class="fa-solid fa-paper-plane"></i> <%= t(:chat_send) %>
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <!-- TAB 5: Job Matcher -->
+    <div id="tab-matcher" class="tab-content" style="display: none;">
+      <section class="matcher-section glass-panel" style="padding: 24px;">
+        <div class="section-title-row" style="margin-bottom: 20px;">
+          <h3 style="font-size: 1.25rem; color: #fff; margin-bottom: 4px;"><i class="fa-solid fa-bullseye text-indigo"></i> <%= t(:matcher_title) %></h3>
+          <p class="section-subtitle" style="font-size: 0.85rem; color: var(--text-secondary);"><%= t(:matcher_desc) %></p>
+        </div>
+        
+        <div class="matcher-input-box" style="display: flex; flex-direction: column; gap: 15px;">
+          <textarea id="job-desc-textarea" placeholder="<%= t(:matcher_placeholder) %>" rows="8" style="width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--border-light); border-radius: 10px; color: #fff; padding: 12px; font-family: inherit; font-size: 0.85rem; resize: vertical; line-height: 1.4;"></textarea>
+          <button class="btn btn-primary" onclick="runJobMatcher()" id="run-matcher-btn" style="align-self: flex-start; padding: 12px 24px;">
+            <i class="fa-solid fa-circle-nodes"></i> <%= t(:matcher_btn) %>
+          </button>
+        </div>
+        
+        <!-- Loading Indicator for Matcher -->
+        <div id="matcher-loading" class="spinner-wrapper" style="display: none; text-align: center; margin-top: 30px;">
+          <div class="spinner-ring" style="width: 45px; height: 45px; margin: 0 auto 10px; border-top-color: var(--primary);"></div>
+          <p style="color: var(--text-secondary); font-size: 0.9rem;"><%= t(:matching) %></p>
+        </div>
+        
+        <!-- Results panel (hidden by default) -->
+        <div id="matcher-results" style="display: none; margin-top: 35px;">
+          <div class="matcher-results-grid" style="display: grid; grid-template-columns: 1fr 2fr; gap: 24px;">
+            
+            <!-- Radial score gauge card -->
+            <div class="matcher-score-card glass-panel" style="padding: 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 15px;">
+              <h4 style="font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); margin: 0;"><%= t(:matcher_matching_score) %></h4>
+              <div class="matcher-gauge-wrapper" style="position: relative; width: 120px; height: 120px; display: flex; align-items: center; justify-content: center;">
+                <canvas id="matcher-gauge-canvas" width="120" height="120"></canvas>
+                <div class="matcher-gauge-text" style="position: absolute; font-size: 1.8rem; font-weight: 800; color: #fff;"><span id="match-pct-value">0</span>%</div>
+              </div>
+            </div>
+            
+            <!-- Keywords analysis card -->
+            <div class="matcher-keywords-card glass-panel" style="padding: 24px; display: flex; flex-direction: column; gap: 20px;">
+              <div class="kw-column">
+                <h5 style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 8px; text-transform: uppercase; font-weight: 600;"><i class="fa-solid fa-circle-check text-green"></i> <%= t(:matcher_matched_keywords) %></h5>
+                <div class="tags-row" id="matched-kws-container" style="display: flex; flex-wrap: wrap; gap: 6px;">
+                  <!-- Tags go here -->
+                </div>
+              </div>
+              
+              <div class="kw-column">
+                <h5 style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 8px; text-transform: uppercase; font-weight: 600;"><i class="fa-solid fa-triangle-exclamation text-yellow"></i> <%= t(:matcher_missing_keywords) %></h5>
+                <div class="tags-row" id="missing-kws-container" style="display: flex; flex-wrap: wrap; gap: 6px;">
+                  <!-- Tags go here -->
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Recommendations card -->
+          <div class="matcher-tailoring-card glass-panel" style="margin-top: 24px; padding: 24px;">
+            <h4 style="font-size: 1.05rem; color: #fff; margin-bottom: 15px;"><i class="fa-solid fa-wand-magic-sparkles text-purple"></i> <%= t(:matcher_tailoring_suggestions) %></h4>
+            <ul class="task-checklist" id="tailoring-suggestions-container" style="display: flex; flex-direction: column; gap: 10px; list-style: none;">
+              <!-- Bullet points go here -->
+            </ul>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<!-- Embedded Analysis Data for Canvas Drawing -->
+<div id="chart-data" 
+     data-general="<%= @record.scores['general'] %>"
+     data-ats="<%= @record.scores['ats'] %>"
+     data-tech="<%= @record.scores['tech'] %>"
+     data-presentation="<%= @record.scores['presentation'] %>"
+     data-employability="<%= @record.scores['employability'] %>"
+     data-radar-labels='<%= (current_locale == "tr" ? ["Ön Yüz", "Arka Yüz", "DevOps & Bulut", "Veritabanı", "Test & Kalite", "Yöntemler", "Yapay Zeka & Veri", "Mobil Geliştirme"] : ["Frontend", "Backend", "DevOps & Cloud", "Databases & Caching", "Testing & QA", "Methodologies", "AI & Data Science", "Mobile Dev"]).to_json %>'
+     data-radar-values='<%= [
+       @record.skills.select { |s| SkillAnalyzerService::DICTIONARY["Frontend"].map(&:downcase).include?(s.downcase) }.size,
+       @record.skills.select { |s| SkillAnalyzerService::DICTIONARY["Backend"].map(&:downcase).include?(s.downcase) }.size,
+       @record.skills.select { |s| SkillAnalyzerService::DICTIONARY["DevOps & Cloud"].map(&:downcase).include?(s.downcase) }.size,
+       @record.skills.select { |s| SkillAnalyzerService::DICTIONARY["Databases & Caching"].map(&:downcase).include?(s.downcase) }.size,
+       @record.skills.select { |s| SkillAnalyzerService::DICTIONARY["Testing & QA"].map(&:downcase).include?(s.downcase) }.size,
+       @record.skills.select { |s| SkillAnalyzerService::DICTIONARY["Methodologies & Concepts"].map(&:downcase).include?(s.downcase) }.size,
+       @record.skills.select { |s| SkillAnalyzerService::DICTIONARY["AI & Data Science"].map(&:downcase).include?(s.downcase) }.size,
+       @record.skills.select { |s| SkillAnalyzerService::DICTIONARY["Mobile Development"].map(&:downcase).include?(s.downcase) }.size
+     ].to_json %>'>
+</div>
+
+<script src="/js/charts.js"></script>
+<script>
+// Tab Switching logic
+function switchTab(button, tabId) {
+  document.querySelectorAll('.tab-content').forEach(el => {
+    el.style.display = 'none';
+  });
+  
+  document.getElementById(tabId).style.display = 'block';
+  
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.classList.remove('active');
+  });
+  button.classList.add('active');
+  
+  if (tabId === 'tab-chat') {
+    const chatBox = document.getElementById('chat-box');
+    chatBox.scrollTop = chatBox.scrollHeight;
+  }
+}
+
+// Collapsible answers logic
+function toggleAnswer(button) {
+  const content = button.parentNode.nextElementSibling;
+  
+  if (content.style.display === 'none') {
+    content.style.display = 'block';
+    button.innerHTML = '<i class="fa-solid fa-eye-slash"></i> <%= current_locale == "tr" ? "Cevabı Gizle" : "Hide Response" %>';
+  } else {
+    content.style.display = 'none';
+    button.innerHTML = '<i class="fa-solid fa-eye"></i> <%= current_locale == "tr" ? "Önerilen Cevabı Göster" : "Reveal Suggested Response" %>';
+  }
+}
+
+// Copy guide comparison texts
+function copyText(button, key) {
+  const textEl = document.getElementById('guide-text-' + key);
+  if (!textEl) return;
+  const textToCopy = textEl.innerText;
+  
+  navigator.clipboard.writeText(textToCopy).then(() => {
+    const label = button.querySelector('.copy-text-lbl');
+    const icon = button.querySelector('i');
+    const originalText = label.innerText;
+    
+    label.innerText = '<%= current_locale == "tr" ? "Kopyalandı!" : "Copied!" %>';
+    icon.className = "fa-solid fa-check text-green";
+    
+    setTimeout(() => {
+      label.innerText = originalText;
+      icon.className = "fa-regular fa-copy";
+    }, 2000);
+  }).catch(err => {
+    console.error('Failed to copy text: ', err);
+  });
+}
+
+// Copy interview answers texts
+function copyPrepText(button, idx) {
+  const textEl = document.getElementById('prep-text-' + idx);
+  if (!textEl) return;
+  const textToCopy = textEl.innerText;
+  
+  navigator.clipboard.writeText(textToCopy).then(() => {
+    const label = button.querySelector('.copy-text-lbl');
+    const icon = button.querySelector('i');
+    const originalText = label.innerText;
+    
+    label.innerText = '<%= current_locale == "tr" ? "Kopyalandı!" : "Copied!" %>';
+    icon.className = "fa-solid fa-check text-green";
+    
+    setTimeout(() => {
+      label.innerText = originalText;
+      icon.className = "fa-regular fa-copy";
+    }, 2000);
+  }).catch(err => {
+    console.error('Failed to copy text: ', err);
+  });
+}
+
+// Settings Toggle Panel
+function toggleSettingsPanel() {
+  const content = document.getElementById('sidebar-settings-content');
+  const chevron = document.getElementById('settings-chevron');
+  if (content.style.display === 'none') {
+    content.style.display = 'block';
+    chevron.style.transform = 'rotate(180deg)';
+  } else {
+    content.style.display = 'none';
+    chevron.style.transform = 'rotate(0deg)';
+  }
+}
+
+function toggleKeyFields(val) {
+  document.querySelectorAll('.key-field').forEach(el => el.style.display = 'none');
+  if (val !== 'local') {
+    const field = document.getElementById('key-field-' + val);
+    if (field) field.style.display = 'flex';
+  }
+}
+
+// Avatar upload overrides
+function triggerAvatarUpload() {
+  document.getElementById('avatar-file-input').click();
+}
+function submitAvatarForm() {
+  document.getElementById('avatar-upload-form').submit();
+}
+
+// Chatbot events
+function sendSuggestedMessage(text) {
+  document.getElementById('chat-message-input').value = text;
+  submitChatMessage();
+}
+function handleChatKeyPress(e) {
+  if (e.key === 'Enter') {
+    submitChatMessage();
+  }
+}
+function submitChatMessage() {
+  const input = document.getElementById('chat-message-input');
+  const message = input.value.trim();
+  if (!message) return;
+  input.value = '';
+  
+  const chatBox = document.getElementById('chat-box');
+  
+  // User bubble
+  const userMsg = document.createElement('div');
+  userMsg.className = 'message message-user';
+  userMsg.style.cssText = 'display: flex; gap: 12px; max-width: 85%; align-self: flex-end; flex-direction: row-reverse;';
+  userMsg.innerHTML = `
+    <div class="message-avatar" style="width: 32px; height: 32px; border-radius: 50%; background: rgba(6, 182, 212, 0.15); display: flex; align-items: center; justify-content: center; font-size: 0.9rem; color: var(--accent-cyan);"><i class="fa-solid fa-user"></i></div>
+    <div class="message-content" style="background: rgba(6, 182, 212, 0.08); border: 1px solid rgba(6, 182, 212, 0.15); padding: 10px 14px; border-radius: 12px 12px 0 12px; font-size: 0.85rem; color: var(--text-primary); line-height: 1.4;">
+      <p>${escapeHtml(message)}</p>
+    </div>
+  `;
+  chatBox.appendChild(userMsg);
+  chatBox.scrollTop = chatBox.scrollHeight;
+  
+  // Loading loader
+  const typingMsg = document.createElement('div');
+  typingMsg.className = 'message message-assistant typing-indicator-msg';
+  typingMsg.style.cssText = 'display: flex; gap: 12px; max-width: 85%;';
+  typingMsg.innerHTML = `
+    <div class="message-avatar" style="width: 32px; height: 32px; border-radius: 50%; background: rgba(99, 102, 241, 0.15); display: flex; align-items: center; justify-content: center; font-size: 0.9rem; color: var(--primary);"><i class="fa-solid fa-brain"></i></div>
+    <div class="message-content" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05); padding: 12px 16px; border-radius: 12px 12px 12px 0;">
+      <div class="typing-loader" style="display: flex; gap: 4px; align-items: center; justify-content: center; height: 12px;">
+        <span style="width: 6px; height: 6px; background: var(--text-secondary); border-radius: 50%; animation: chatPulse 1.2s infinite ease-in-out;"></span>
+        <span style="width: 6px; height: 6px; background: var(--text-secondary); border-radius: 50%; animation: chatPulse 1.2s infinite ease-in-out; animation-delay: 0.2s;"></span>
+        <span style="width: 6px; height: 6px; background: var(--text-secondary); border-radius: 50%; animation: chatPulse 1.2s infinite ease-in-out; animation-delay: 0.4s;"></span>
+      </div>
+    </div>
+  `;
+  chatBox.appendChild(typingMsg);
+  chatBox.scrollTop = chatBox.scrollHeight;
+  
+  fetch('/dashboard/<%= @record.id %>/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: 'message=' + encodeURIComponent(message)
+  })
+  .then(res => res.json())
+  .then(data => {
+    typingMsg.remove();
+    
+    const assistantMsg = document.createElement('div');
+    assistantMsg.className = 'message message-assistant';
+    assistantMsg.style.cssText = 'display: flex; gap: 12px; max-width: 85%;';
+    assistantMsg.innerHTML = `
+      <div class="message-avatar" style="width: 32px; height: 32px; border-radius: 50%; background: rgba(99, 102, 241, 0.15); display: flex; align-items: center; justify-content: center; font-size: 0.9rem; color: var(--primary);"><i class="fa-solid fa-brain"></i></div>
+      <div class="message-content" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05); padding: 10px 14px; border-radius: 12px 12px 12px 0; font-size: 0.85rem; color: var(--text-primary); line-height: 1.4;">
+        <p>${escapeHtml(data.response).replace(/\n/g, '<br>')}</p>
+      </div>
+    `;
+    chatBox.appendChild(assistantMsg);
+    chatBox.scrollTop = chatBox.scrollHeight;
+  })
+  .catch(err => {
+    console.error(err);
+    typingMsg.remove();
+  });
+}
+
+// Mock Interview Sim Practice Panel Toggle
+function openPracticeSimulator(btn, idx) {
+  const panel = document.getElementById('practice-panel-' + idx);
+  if (panel.style.display === 'none') {
+    panel.style.display = 'block';
+    btn.innerHTML = '<i class="fa-solid fa-microphone-slash"></i> <%= current_locale == "tr" ? "Simülasyonu Kapat" : "Close Simulation" %>';
+    btn.className = 'btn btn-secondary';
+  } else {
+    panel.style.display = 'none';
+    btn.innerHTML = '<i class="fa-solid fa-microphone"></i> <%= current_locale == "tr" ? "Bu Soruyu Yanıtla (Pratik)" : "Practice This Question" %>';
+    btn.className = 'btn btn-primary';
+  }
+}
+
+// Mock Interview Answer AJAX Grading
+function submitPracticeAnswer(btn, idx) {
+  const panel = document.getElementById('practice-panel-' + idx);
+  const textarea = panel.querySelector('.practice-answer-textarea');
+  const text = textarea.value.trim();
+  if (!text) return;
+  
+  const spinner = panel.querySelector('.practice-spinner');
+  const resultsBox = panel.querySelector('.practice-results-box');
+  
+  resultsBox.style.display = 'none';
+  spinner.style.display = 'block';
+  btn.disabled = true;
+  
+  const card = panel.closest('.interview-card');
+  const questionText = card.querySelector('h4').innerText;
+  
+  fetch('/dashboard/<%= @record.id %>/interview/evaluate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: 'question=' + encodeURIComponent(questionText) + '&answer=' + encodeURIComponent(text)
+  })
+  .then(res => res.json())
+  .then(data => {
+    spinner.style.display = 'none';
+    btn.disabled = false;
+    
+    // Set grading results
+    panel.querySelector('.practice-score-value').innerText = data.score;
+    
+    // Strengths
+    const strengthsContainer = panel.querySelector('.practice-strengths-list');
+    strengthsContainer.innerHTML = '';
+    data.strengths.forEach(s => {
+      const li = document.createElement('li');
+      li.innerHTML = `<i class="fa-solid fa-check text-green" style="margin-right: 6px;"></i> ${escapeHtml(s)}`;
+      strengthsContainer.appendChild(li);
+    });
+    
+    // Gaps
+    const gapsContainer = panel.querySelector('.practice-gaps-list');
+    gapsContainer.innerHTML = '';
+    data.gaps.forEach(g => {
+      const li = document.createElement('li');
+      li.innerHTML = `<i class="fa-solid fa-xmark text-yellow" style="margin-right: 6px;"></i> ${escapeHtml(g)}`;
+      gapsContainer.appendChild(li);
+    });
+    
+    // Refined Answer Text
+    panel.querySelector('.practice-refined-box').innerText = data.refined_answer;
+    
+    resultsBox.style.display = 'block';
+  })
+  .catch(err => {
+    console.error(err);
+    spinner.style.display = 'none';
+    btn.disabled = false;
+  });
+}
+
+// Job Matcher AJAX Alignment
+function runJobMatcher() {
+  const textarea = document.getElementById('job-desc-textarea');
+  const text = textarea.value.trim();
+  if (!text) return;
+  
+  const btn = document.getElementById('run-matcher-btn');
+  const spinner = document.getElementById('matcher-loading');
+  const resultsBox = document.getElementById('matcher-results');
+  
+  btn.disabled = true;
+  spinner.style.display = 'block';
+  resultsBox.style.display = 'none';
+  
+  fetch('/dashboard/<%= @record.id %>/match_job', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: 'job_description=' + encodeURIComponent(text)
+  })
+  .then(res => res.json())
+  .then(data => {
+    spinner.style.display = 'none';
+    btn.disabled = false;
+    
+    // Matcher Score text
+    document.getElementById('match-pct-value').innerText = data.score;
+    
+    // Render matching tags
+    const matchedContainer = document.getElementById('matched-kws-container');
+    matchedContainer.innerHTML = '';
+    if (data.matched_keywords.length === 0) {
+      matchedContainer.innerHTML = '<span style="font-size: 0.8rem; color: var(--text-muted);">None found</span>';
+    } else {
+      data.matched_keywords.forEach(kw => {
+        const span = document.createElement('span');
+        span.className = 'tag tag-matched';
+        span.innerText = kw;
+        matchedContainer.appendChild(span);
+      });
+    }
+    
+    // Render missing tags
+    const missingContainer = document.getElementById('missing-kws-container');
+    missingContainer.innerHTML = '';
+    if (data.missing_keywords.length === 0) {
+      missingContainer.innerHTML = '<span style="font-size: 0.8rem; color: var(--secondary);"><i class="fa-solid fa-circle-check"></i> Complete match!</span>';
+    } else {
+      data.missing_keywords.forEach(kw => {
+        const span = document.createElement('span');
+        span.className = 'tag tag-gap';
+        span.innerText = kw;
+        missingContainer.appendChild(span);
+      });
+    }
+    
+    // Tailoring instructions list
+    const suggestionsContainer = document.getElementById('tailoring-suggestions-container');
+    suggestionsContainer.innerHTML = '';
+    data.tailoring_suggestions.forEach(sug => {
+      const li = document.createElement('li');
+      li.style.cssText = 'font-size: 0.85rem; color: var(--text-primary); line-height: 1.4; display: flex; gap: 8px; align-items: flex-start;';
+      li.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles text-purple" style="margin-top: 3px;"></i> <span>${escapeHtml(sug)}</span>`;
+      suggestionsContainer.appendChild(li);
+    });
+    
+    resultsBox.style.display = 'block';
+    
+    // Draw canvas gauge
+    setTimeout(() => {
+      drawMiniGauge('matcher-gauge-canvas', data.score);
+    }, 100);
+  })
+  .catch(err => {
+    console.error(err);
+    spinner.style.display = 'none';
+    btn.disabled = false;
+  });
+}
+
+function drawMiniGauge(canvasId, pct) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const cx = canvas.width / 2;
+  const cy = canvas.height / 2;
+  const radius = 48;
+  
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  // Track ring background
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
+  ctx.lineWidth = 6;
+  ctx.stroke();
+  
+  // Active gauge stroke
+  ctx.beginPath();
+  const startAngle = -Math.PI / 2;
+  const endAngle = startAngle + (Math.PI * 2 * (pct / 100));
+  ctx.arc(cx, cy, radius, startAngle, endAngle);
+  ctx.strokeStyle = pct >= 80 ? '#10b981' : (pct >= 60 ? '#f59e0b' : '#ef4444');
+  ctx.lineWidth = 6;
+  ctx.lineCap = 'round';
+  ctx.stroke();
+}
+
+function escapeHtml(text) {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+</script>

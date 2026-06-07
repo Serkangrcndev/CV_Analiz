@@ -1,0 +1,156 @@
+<div class="dashboard-container">
+  
+  <!-- Left Sidebar: History -->
+  <aside class="sidebar glass-panel">
+    <div class="sidebar-header">
+      <div class="logo">
+        <i class="fa-solid fa-brain logo-icon"></i>
+        <span>CareerMind <strong class="logo-accent">AI</strong></span>
+      </div>
+      <!-- Language Selector -->
+      <div class="lang-selector">
+        <a href="/locale/en" class="lang-link <%= 'active' if current_locale == 'en' %>">EN</a>
+        <span class="divider">|</span>
+        <a href="/locale/tr" class="lang-link <%= 'active' if current_locale == 'tr' %>">TR</a>
+      </div>
+    </div>
+    
+    <div class="sidebar-section">
+      <h3><i class="fa-solid fa-history"></i> <%= t(:history) %></h3>
+      <div class="history-list">
+        <% if @records.empty? %>
+          <div class="history-empty">
+            <i class="fa-regular fa-folder-open"></i>
+            <p><%= t(:no_reports) %></p>
+          </div>
+        <% else %>
+          <% @records.each do |rec| %>
+            <div class="history-item glass-card">
+              <div class="history-item-details">
+                <a href="/dashboard/<%= rec.id %>" class="history-name">
+                  <%= rec.personal_info['name'] || "Candidate" %>
+                </a>
+                <span class="history-meta">
+                  <%= rec.career_recommendations.first&.[]('role') || 'Software Engineering' %>
+                </span>
+                <span class="history-date"><%= format_date(rec.created_at) %></span>
+              </div>
+              <div class="history-item-badge">
+                <span class="history-score <%= score_class(rec.scores['general']) %>">
+                  <%= rec.scores['general'] %>
+                </span>
+                <form action="/delete/<%= rec.id %>" method="POST" class="delete-form" onsubmit="return confirm('Are you sure?');">
+                  <button type="submit" class="delete-btn" title="Delete record">
+                    <i class="fa-solid fa-trash-can"></i>
+                  </button>
+                </form>
+              </div>
+            </div>
+          <% end %>
+        <% end %>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Right Content Area -->
+  <main class="main-content">
+    <header class="main-header">
+      <h1><%= t(:title) %></h1>
+      <p class="subtitle"><%= t(:subtitle) %></p>
+    </header>
+
+    <!-- Upload Section -->
+    <section class="upload-section glass-panel">
+      <div class="upload-container" id="drop-zone">
+        <form id="upload-form" action="/analyze" method="POST" enctype="multipart/form-data">
+          <div class="upload-icon-wrapper">
+            <i class="fa-solid fa-cloud-arrow-up upload-icon"></i>
+          </div>
+          <h2><%= t(:drag_drop) %></h2>
+          <p class="upload-formats"><%= t(:formats) %></p>
+          <label for="cv-file" class="btn btn-primary select-btn">
+            <%= t(:browse) %>
+            <input type="file" id="cv-file" name="cv" accept=".pdf,.docx,.txt" style="display: none;">
+          </label>
+        </form>
+      </div>
+
+      <!-- Progressive Loading Animation Overlay -->
+      <div class="analysis-loading-overlay" id="loading-overlay" style="display: none;">
+        <div class="loader-box glass-panel">
+          <div class="spinner-ring"></div>
+          <h2><%= t(:analyzing_profile) %></h2>
+          <p class="loader-subtitle"><%= t(:evaluating_experience) %></p>
+          
+          <ul class="progress-steps">
+            <li id="step-parsing" class="step"><i class="fa-regular fa-circle"></i> <%= t(:parsing) %></li>
+            <li id="step-skills" class="step"><i class="fa-regular fa-circle"></i> <%= t(:skills) %></li>
+            <li id="step-ats" class="step"><i class="fa-regular fa-circle"></i> <%= t(:ats_analysis) %></li>
+            <li id="step-matching" class="step"><i class="fa-regular fa-circle"></i> <%= t(:matching) %></li>
+            <li id="step-report" class="step"><i class="fa-regular fa-circle"></i> <%= t(:report) %></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- Stats Panels -->
+    <section class="stats-overview">
+      <div class="stats-grid">
+        <div class="stat-card glass-panel">
+          <div class="stat-icon-wrapper color-cyan">
+            <i class="fa-solid fa-file-invoice"></i>
+          </div>
+          <div class="stat-value"><%= @stats['total_analyses'] %></div>
+          <div class="stat-label"><%= t(:total_processed) %></div>
+        </div>
+        
+        <div class="stat-card glass-panel">
+          <div class="stat-icon-wrapper color-violet">
+            <i class="fa-solid fa-chart-line"></i>
+          </div>
+          <div class="stat-value"><%= @stats['average_score'] %><span class="pct-symbol">/100</span></div>
+          <div class="stat-label"><%= t(:avg_score) %></div>
+        </div>
+      </div>
+
+      <% if @stats['total_analyses'] > 0 %>
+        <div class="stats-charts-row">
+          <!-- Common Skills Widget -->
+          <div class="chart-card glass-panel">
+            <h3><i class="fa-solid fa-tags text-indigo"></i> <%= t(:in_demand) %></h3>
+            <p class="widget-subtitle"><%= t(:top_skills_sub) %></p>
+            <div class="skills-bar-chart">
+              <% @stats['top_skills'].each do |skill, count| %>
+                <% pct = ((count.to_f / @stats['total_analyses']) * 100).round(0) %>
+                <div class="skill-bar-row">
+                  <span class="skill-name"><%= skill %></span>
+                  <div class="skill-bar-outer">
+                    <div class="skill-bar-inner" style="width: <%= pct %>%;"></div>
+                  </div>
+                  <span class="skill-pct"><%= count %> CV</span>
+                </div>
+              <% end %>
+            </div>
+          </div>
+
+          <!-- Score Distribution Widget -->
+          <div class="chart-card glass-panel">
+            <h3><i class="fa-solid fa-chart-pie text-purple"></i> <%= t(:score_breakdown) %></h3>
+            <p class="widget-subtitle"><%= t(:score_breakdown_sub) %></p>
+            <div class="score-distribution-list">
+              <% @stats['score_distribution'].each do |bracket, count| %>
+                <div class="dist-row">
+                  <span class="dist-bracket"><%= bracket %></span>
+                  <span class="dist-count badge"><%= count %> CV</span>
+                </div>
+              <% end %>
+            </div>
+          </div>
+        </div>
+      <% end %>
+    </section>
+  </main>
+</div>
+
+<!-- Upload Script -->
+<script src="/js/uploader.js"></script>
